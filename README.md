@@ -212,18 +212,18 @@ Runtime conclusion: verified | not verified
 ## 安装
 
 ```powershell
-git clone https://github.com/wsoz-ohb/rt-thread-integrated-debug.git
+git clone https://github.com/wsoz-ohb/rt-thread-integrated-debug-skill.git
 ```
 
 保持仓库目录完整即可，不需要拆分 `SKILL.md`、`scripts/` 和 `references/`。
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=wsoz-ohb%2Frt-thread-integrated-debug&type=timeline&legend=top-left">
+<a href="https://www.star-history.com/?repos=wsoz-ohb%2Frt-thread-integrated-debug-skill&type=timeline&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=wsoz-ohb/rt-thread-integrated-debug&type=timeline&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=wsoz-ohb/rt-thread-integrated-debug&type=timeline&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=wsoz-ohb/rt-thread-integrated-debug&type=timeline&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=wsoz-ohb/rt-thread-integrated-debug-skill&type=timeline&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=wsoz-ohb/rt-thread-integrated-debug-skill&type=timeline&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=wsoz-ohb/rt-thread-integrated-debug-skill&type=timeline&legend=top-left" />
  </picture>
 </a>
 
