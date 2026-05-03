@@ -64,7 +64,7 @@
   - `arm-none-eabi-gcc`
   - `arm-none-eabi-objcopy`
   - `arm-none-eabi-size`
-- 串口验证需要 Python 环境和可用串口权限
+- 串口验证需要 Python 环境、`pyserial` 和可用串口权限
 - 烧录验证按调试器类型准备对应工具：
   - DAPLink / CMSIS-DAP / DAP：PyOCD
   - ST-LINK：STM32CubeProgrammer
@@ -121,6 +121,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/FlashJLink_powershel
 ### 串口验证
 
 ```powershell
+pip install pyserial
 python scripts/Open_serial_msh.py --port COM19 --baudrate 115200 --read-seconds 2 --command reboot --after-command-seconds 5 --log-path serial-reboot.log
 ```
 

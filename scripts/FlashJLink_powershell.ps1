@@ -19,7 +19,9 @@ param(
 
     [string]$CommandFilePath = "",
 
-    [string]$LogPath = ""
+    [string]$LogPath = "",
+
+    [int]$KeepLogs = 10
 )
 
 Set-StrictMode -Version Latest
@@ -112,6 +114,42 @@ function Get-FirstProblemLine {
     return $null
 }
 
+function Remove-OldLogFiles {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Pattern,
+
+        [Parameter(Mandatory = $true)]
+        [int]$Keep
+    )
+
+    if ($Keep -lt 0 -or -not (Test-Path -LiteralPath $Directory -PathType Container)) {
+        return 0
+    }
+
+    $files = @(Get-ChildItem -LiteralPath $Directory -Filter $Pattern -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+    $removeCount = [Math]::Max(0, $files.Count - $Keep)
+    $deletedCount = 0
+
+    if ($removeCount -le 0) {
+        return 0
+    }
+
+    foreach ($file in @($files | Select-Object -Last $removeCount)) {
+        try {
+            Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+            $deletedCount += 1
+        }
+        catch {
+        }
+    }
+
+    return $deletedCount
+}
+
 $resolvedFirmwarePath = Resolve-ExistingFile -PathValue $FirmwarePath -Name "FirmwarePath"
 
 if ([System.IO.Path]::IsPathRooted($JLinkPath)) {
@@ -179,6 +217,7 @@ $outputLines = @($invokeResult.Lines)
 $exitCode = [int]$invokeResult.ExitCode
 $outputText = ($outputLines -join [Environment]::NewLine)
 [System.IO.File]::WriteAllText($resolvedLogPath, $outputText + [Environment]::NewLine, $utf8NoBom)
+$oldFlashLogDeletedCount = Remove-OldLogFiles -Directory (Split-Path -Parent $resolvedLogPath) -Pattern "rt-thread-jlink-flash-*.log" -Keep $KeepLogs
 
 $success = ($exitCode -eq 0 -and $outputText -notmatch "(?i)(error|failed|verification.*failed)")
 $noProbe = $outputText -match "(?i)(no j-link|cannot connect|could not connect|failed to connect)"
@@ -206,6 +245,8 @@ $result = [ordered]@{
     exitCode = $exitCode
     noProbe = [bool]$noProbe
     firstProblemLine = Get-FirstProblemLine -Lines $outputLines
+    keepLogs = [int]$KeepLogs
+    oldLogDeletedCount = [int]$oldFlashLogDeletedCount
     logPath = $resolvedLogPath
 }
 

@@ -565,52 +565,31 @@ Runtime conclusion: verified/not verified
 
 ## Scripts
 
-This skill currently provides helper scripts for building RT-Thread projects, flashing firmware, and reading serial debug logs.
-
-The agent should use these scripts to verify code changes through the embedded development workflow:
-
-code modification -> build verification -> serial log inspection -> issue analysis -> code fix
-
-Firmware flashing must only be performed after the build succeeds and the target board, firmware path, programmer/debugger type, target name, and flash command can be confirmed from user input, project settings, logs, scripts, connected-tool evidence, or prior verified workflow evidence. If these cannot be confirmed, mark the flash gate as blocked instead of stopping after build success.
-
-### Available Scripts
+This skill provides helper scripts for build, flash, and serial evidence. Use them as the standard execution path unless the script is missing, fails after one focused repair attempt, or the user explicitly requests a raw command.
 
 | Script                              | Purpose                                                      |
 | ----------------------------------- | ------------------------------------------------------------ |
-| `scripts/Build_powershell.ps1`      | Standard build entry. By default it discovers the GNU Arm toolchain, safely deletes generated artifacts inside the build directory, runs the configured build command, and captures Makefile, `arm-none-eabi-gcc`, linker, `objcopy`, and `size` output. |
+| `scripts/Build_powershell.ps1`      | Standard build entry. Discovers GNU Arm toolchains, safe-cleans generated artifacts, runs the build command, and captures compiler/linker evidence. |
 | `scripts/FlashMCU_powershell.ps1`   | Flash firmware through DAPLink/CMSIS-DAP/DAP using PyOCD. Requires a confirmed PyOCD `-Target` value. |
 | `scripts/FlashSTLink_powershell.ps1` | Flash firmware through ST-LINK using `STM32_Programmer_CLI.exe`. |
 | `scripts/FlashJLink_powershell.ps1` | Flash firmware through J-Link using `JLink.exe` and a generated commander script. Requires a confirmed J-Link `-Device` value. |
-| `scripts/Open_serial_msh.py`        | Open the serial port, read RT-Thread runtime logs, and optionally send FinSH/MSH test commands. |
+| `scripts/Open_serial_msh.py`        | Open the serial port, read RT-Thread runtime logs, and optionally send FinSH/MSH commands. |
 
-### Script Usage Rules
+Script rules:
 
-- Always run the build script after modifying code or configuration when the required build command is available. The default script invocation performs `safe-clean` inside the build directory and then runs the build command.
-- Do not run a raw build command before `scripts/Build_powershell.ps1` unless the script is missing, cannot run after one focused repair attempt, or the user explicitly requests the raw command.
-- Run build, flash, and serial helper scripts outside the sandbox by default, or request outside-sandbox execution permission before running them.
-- If a raw build command is used, report it as a fallback and explain why.
-- Distinguish build evidence levels in the report: standard stable rebuild, fallback forced rebuild, or incremental fallback.
-- When the build fails because `arm-none-eabi-*` tools are missing, use the script's automatic discovery and inspect its reported `available*Path` and `autoDetectedToolchainBinDir` fields before diagnosing source code. Use `-ToolchainBinDir` only as a fallback after local evidence identifies a concrete toolchain path.
-- Do not run `make clean` as the normal path. If `make clean` is explicitly used for diagnosis, treat `Error NN (ignored)` and remaining `.o`, `.d`, `.elf`, `.bin`, `.map`, `.siz`, or `.hex` files as evidence that clean did not complete, even if `make` exits with code 0. If `Build_powershell.ps1` reports `cleanMethod: safe-clean`, `cleanSuccess: true`, and `fullRebuild: true`, accept it as the standard build gate evidence.
-- Do not continue runtime verification if the build fails.
-- Flash firmware only after the build succeeds and flashing details are confirmed.
-- Do not treat sandbox USB, serial-port, permission, PyOCD extraction, toolchain path, or temporary-file failures as project, board, or wiring failures until the relevant helper script has been retried outside the sandbox.
-- After a successful build, continue to flash and serial verification when those gates are available. Do not stop at build success.
-- Confirm the programmer/debugger type before selecting the flash script or command.
-- Confirm the tool-specific target name before flashing. Do not assume `STM32F407VG` or any MCU model string is accepted by the selected flash tool.
-- Use `FlashMCU_powershell.ps1` only for DAPLink/CMSIS-DAP/DAP.
-- Use `FlashSTLink_powershell.ps1` only for ST-LINK.
-- Use `FlashJLink_powershell.ps1` only for J-Link.
+- Run build, flash, and serial helper scripts outside the sandbox by default, or request outside-sandbox permission before running them.
+- After modifying code or configuration, run `Build_powershell.ps1` when a build command is available. Do not run raw `make`, `scons`, or `cmake --build` first unless using a stated fallback.
+- If a raw build is used, report why and label the evidence as `fallback forced rebuild` or `incremental fallback`.
+- Do not continue flash or runtime verification after a failed build.
+- After a successful build, continue to flash and serial verification when those gates are available; do not stop at build success.
+- Confirm programmer/debugger type and tool-specific target name before choosing a flash script. Use PyOCD only for DAPLink/CMSIS-DAP/DAP, STM32CubeProgrammer only for ST-LINK, and J-Link tools only for J-Link.
 - Do not choose a flash script only because its tool exists on the PC.
-- Use serial logs as runtime evidence when debugging.
-- Do not guess the serial port or baud rate if they are not configured.
-- If serial access is unavailable, report that runtime verification cannot be performed.
-- For `Open_serial_msh.py`, use repeated `--command` arguments and `--after-command-seconds` for post-command capture time. Check the script help instead of inventing parameter names.
-- If runtime/debug validation needs physical user assistance, ask immediately with a concrete action and expected observation. Do not silently wait or postpone the request to the final report.
-- Helper scripts keep only the newest 10 matching logs by default. Build logs use `rt-thread-build-*.log`, DAP/PyOCD flash logs use `rt-thread-flash-*.log`, and serial logs use `rt-thread-serial-*.log`. Use `-KeepLogs` or `--keep-logs` only when a different retention count is needed.
-- Capture and analyze the output of build, flash, and serial scripts when they are used.
-- Prefer project-provided build commands when available.
-- If the project uses `SConstruct`, the default build command is usually `scons -j8`.
+- Do not guess serial port or baud rate. If serial access is unavailable, mark the serial gate as blocked or skipped with the reason.
+- For `Open_serial_msh.py`, use repeated `--command` arguments and `--after-command-seconds`; inspect script help instead of inventing options.
+- If runtime validation needs physical user assistance, ask immediately with one concrete action and expected observation.
+- Helper scripts keep only the newest 10 matching logs by default. Build logs use `rt-thread-build-*.log`, DAP/PyOCD flash logs use `rt-thread-flash-*.log`, ST-LINK flash logs use `rt-thread-stlink-flash-*.log`, J-Link flash logs use `rt-thread-jlink-flash-*.log`, and serial logs use `rt-thread-serial-*.log`. Use `-KeepLogs` or `--keep-logs` only when a different retention count is needed.
+- Capture and analyze script JSON output and log files as evidence.
+- Prefer project-provided build commands when available. If the project uses `SConstruct`, the default build command is usually `scons -j8`.
 
 ## References
 
@@ -623,62 +602,52 @@ Firmware flashing must only be performed after the build succeeds and the target
 
 ## Output style
 
-Use concise engineering reports.
+Use concise engineering reports supported by concrete evidence. Include:
 
-When reporting progress or final results, include the evidence that supports the conclusion:
+- Task understanding and change scope.
+- Modified files and main changes.
+- Build evidence level, clean method/result, build command, visible compiler/linker evidence, pass/fail result, and first meaningful error if failed.
+- Flash command and result when flashing was performed or attempted.
+- Serial port, baud rate, key logs, shell output, or observed board behavior when available.
+- Gate report:
 
-- Task understanding: summarize the user's request and the RT-Thread area involved.
-- Scope: state whether the task was handled as a simple change or split into staged verification.
-- Modified files: list each changed file and the purpose of the change.
-- Verification stages: for complex tasks, report each stage with the change made, build result, flash result if performed, serial/runtime evidence if collected, and the next decision.
-- Build result: include the build evidence level, whether the build was a standard stable rebuild or fallback forced rebuild or incremental fallback, the clean method/result, the build command, the underlying compiler such as `arm-none-eabi-gcc` when visible, whether it passed, and the first meaningful error if it failed.
-- Flash result: include the flash command only when flashing was performed or attempted.
-- Serial/runtime result: include the serial port, baud rate, key logs, shell output, or observed board behavior when available.
-- Remaining limits: clearly state any step that was not verified, such as unavailable hardware, missing flash command, missing serial port, or missing toolchain.
-- Next step: when the issue is not fully solved, give the smallest useful next action.
+```text
+Build gate: passed/failed/skipped/blocked
+Flash gate: passed/failed/skipped/blocked
+Serial gate: passed/failed/skipped/blocked
+Runtime conclusion: verified/not verified
+```
 
-Prefer file paths and concrete evidence over broad claims. Do not say the problem is fixed unless the relevant build, flash, and runtime checks have passed or the remaining unverified steps are explicitly stated.
-
-Log files are supporting evidence, not the main result. In successful runs, summarize the gate status and key evidence, and mention log paths only briefly or when the user asks. In failed runs, report the first meaningful failure line and the relevant log path.
-
+Do not say the problem is fixed unless the relevant build, flash, serial, and runtime checks have passed, or every unverified gate is explicitly marked with a concrete reason. Log files are supporting evidence; summarize the key result and mention log paths briefly, especially for failures.
 
 ## Quality checks
 
-Before delivering, check the following:
+Before delivering, verify that:
 
-- The RT-Thread project was actually identified from files such as `rtconfig.h`, `.config`, `Kconfig`, `SConstruct`, `SConscript`, `rtthread.h`, or the BSP structure.
-- The user task was understood before editing files.
-- The relevant project structure, configuration files, source files, and existing scripts were inspected.
-- Complex tasks were split into small verification stages instead of being implemented in one large step.
-- Each stage had a clear purpose, expected result, and verification method.
-- Code or configuration changes were minimal and limited to the user's task.
-- RT-Thread APIs, macros, device names, and component settings were checked against local code, headers, configuration files, or reliable documentation instead of guessed.
-- Related configuration files such as `.config`, `rtconfig.h`, `Kconfig`, and package settings were kept consistent when they were affected.
-- The project was fully rebuilt after meaningful source or configuration changes when a build command and toolchain were available, or the report explicitly labels the result as `fallback forced rebuild` or `incremental fallback` with the reason.
+- The RT-Thread project was identified from project evidence such as `rtconfig.h`, `.config`, `Kconfig`, `SConstruct`, `SConscript`, `rtthread.h`, or BSP structure.
+- The user task, relevant project structure, configuration, source files, and existing scripts were inspected before editing.
+- Complex tasks were split into small verification stages.
+- Changes were minimal and limited to the user's task.
+- RT-Thread APIs, macros, device names, component settings, and related config files were checked against local evidence or reliable documentation instead of guessed.
+- Meaningful code or configuration changes were followed by a full build when possible, or the report labels the build fallback level and reason.
 - Build failures were analyzed from the first meaningful compiler or linker error.
-- Firmware was flashed only after a successful build and only when flashing details were confirmed.
-- Serial logs or runtime observations were collected when hardware and serial access were available.
+- Firmware was flashed only after build success and confirmed flash details.
 - Runtime conclusions were based on build output, serial logs, shell output, board behavior, or user-confirmed observations.
-- Dangerous flashing operations were not performed without explicit user confirmation.
-- All unverified steps and remaining risks were reported honestly.
+- Dangerous flash operations were not performed without explicit user confirmation.
+- All unverified gates and remaining risks were reported honestly.
 
 ## Do not
 
 - Do not make broad one-shot changes when a smaller targeted change can solve the current problem.
-- Do not try to complete code modification, configuration changes, flashing, and runtime debugging in one large unverified step.
-- Do not rewrite unrelated application logic, BSP code, driver code, startup files, linker scripts, clock configuration, or pin mappings unless the user's task requires it and the evidence supports it.
-- Do not assume the first implementation is correct. Prefer small changes followed by build verification, firmware flashing when allowed, serial log inspection, and then the next adjustment.
+- Do not rewrite unrelated application logic, BSP code, driver code, startup files, linker scripts, clock configuration, or pin mappings unless required by evidence.
 - Do not skip build verification after meaningful code or configuration changes.
-- Do not present a raw incremental build as full build gate evidence.
-- Do not call `make -B` a clean full rebuild; report it as a forced rebuild fallback.
+- Do not present raw incremental builds as full build gate evidence or call `make -B` a clean full rebuild.
 - Do not flash firmware before the project builds successfully.
-- Do not end the task after a successful build when the flash and serial gates are available or can be confirmed from evidence.
-- Do not repeatedly flash blindly. Each flash attempt should have a clear purpose, expected observation, and follow-up decision based on logs or board behavior.
-- Do not treat build success as final completion when the requested behavior requires flashing or runtime verification.
-- Do not report "fixed" or "complete" unless the relevant build, flash, serial, and runtime gates have passed or skipped gates are explicitly marked as unverified.
-- Do not use default script parameters as facts. Confirm project root, build directory, toolchain, firmware path, MCU, programmer type, flash target name, serial port, and baud rate from the project, logs, tool output, or user.
-- Do not guess RT-Thread APIs, configuration macros, device names, serial ports, baud rates, target boards, MCU models, programmer/debugger type, or flash commands. Inspect local code, headers, configuration files, project scripts, RT-Thread Studio settings, existing logs, connected-tool evidence, or ask the user when the information is missing.
-- Do not perform dangerous flash operations such as mass erase, option-byte modification, read-protection changes, bootloader overwrite, or flash protection changes unless the user explicitly requests and confirms them.
-- Do not claim the issue is fixed only because the code compiles. For runtime problems, use serial logs, shell output, board behavior, or user-confirmed hardware observations as evidence.
-- Do not hide verification limits. If build, flashing, serial monitoring, or hardware testing cannot be performed, state exactly which step was not verified and why.
+- Do not end after a successful build when flash and serial gates are available or can be confirmed from evidence.
+- Do not repeatedly flash blindly. Each attempt needs a purpose, expected observation, and follow-up decision.
+- Do not use default script parameters as facts. Confirm project root, build directory, toolchain, firmware path, MCU, programmer type, flash target name, serial port, and baud rate from evidence or user input.
+- Do not guess RT-Thread APIs, configuration macros, device names, serial ports, baud rates, target boards, MCU models, programmer/debugger type, or flash commands.
+- Do not perform mass erase, option-byte modification, read-protection changes, bootloader overwrite, or flash protection changes unless the user explicitly requests and confirms them.
+- Do not claim runtime issues are fixed only because the code compiles.
+- Do not hide verification limits.
 
